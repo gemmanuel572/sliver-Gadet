@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense, type FormEvent } from "react";
+import {
+  Suspense,
+  useEffect,
+  type FormEvent,
+} from "react";
 import { products } from "@/data/products";
+import {
+  ensureSignedIn,
+  restorePendingOrder,
+} from "@/lib/order-auth";
 
-// PHONE CONDITION LABELS
 const conditionLabels: Record<string, string> = {
   batteryHealth: "Battery Health",
   screen: "Screen Condition",
@@ -20,23 +27,21 @@ const conditionLabels: Record<string, string> = {
   trueTone: "True Tone",
 };
 
-// INPUT STYLING
 const inputStyle =
   "w-full rounded-xl border border-white/10 bg-[#080b12] px-4 py-4 text-white outline-none focus:border-blue-500";
 
-// NIGERIAN PHONE NUMBER VALIDATION
+// VALIDATE NIGERIAN PHONE NUMBERS
 function isValidPhone(number: string) {
   return /^0[0-9]{10}$/.test(number);
 }
 
-// REMOVE LETTERS AND SYMBOLS FROM PHONE NUMBERS
+// REMOVE LETTERS AND SYMBOLS
 function handlePhoneInput(event: FormEvent<HTMLInputElement>) {
   event.currentTarget.value = event.currentTarget.value
     .replace(/\D/g, "")
     .slice(0, 11);
 }
 
-// PRODUCT DETAILS COMPONENT
 function ProductDetailsContent() {
   const params = useParams();
 
@@ -44,13 +49,29 @@ function ProductDetailsContent() {
     (item) => item.id === params.id
   );
 
+  // RESTORE FORM DETAILS AFTER GOOGLE LOGIN
+  useEffect(() => {
+    const form = document.getElementById(
+      "silva-order-form"
+    );
+
+    if (form instanceof HTMLFormElement) {
+      restorePendingOrder(form);
+    }
+  }, [product?.id]);
+
   // HANDLE CUSTOMER ORDER
-  function handleOrder(event: FormEvent<HTMLFormElement>) {
+  async function handleOrder(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
+
+    // Remember the form element before the async operation.
+    const submittedForm = event.currentTarget;
 
     if (!product) return;
 
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(submittedForm);
 
     const getValue = (name: string) =>
       String(form.get(name) || "").trim();
@@ -70,14 +91,17 @@ function ProductDetailsContent() {
     // DELIVERY DETAILS
     const address = getValue("address");
     const location = getValue("location");
-    const deliveryPreference = getValue("deliveryPreference");
+    const deliveryPreference = getValue(
+      "deliveryPreference"
+    );
 
     const note = getValue("note");
 
     // VALIDATE MAIN PHONE NUMBER
     if (!isValidPhone(phone)) {
       alert(
-        "Please enter a valid Nigerian phone number containing exactly 11 digits and starting with 0."
+        "Enter a valid Nigerian phone number: " +
+          "exactly 11 digits starting with 0."
       );
       return;
     }
@@ -88,7 +112,7 @@ function ProductDetailsContent() {
       !isValidPhone(alternativePhone)
     ) {
       alert(
-        "Please enter a valid 11-digit alternative phone number."
+        "Enter a valid 11-digit alternative phone number."
       );
       return;
     }
@@ -96,9 +120,12 @@ function ProductDetailsContent() {
     // VALIDATE CUSTOMER NAME
     const namePattern = /^[\p{L}\s'.-]+$/u;
 
-    if (!customerName || !namePattern.test(customerName)) {
+    if (
+      !customerName ||
+      !namePattern.test(customerName)
+    ) {
       alert(
-        "Please enter a valid full name using letters, not numbers."
+        "Please enter a valid full name using letters."
       );
       return;
     }
@@ -120,11 +147,20 @@ function ProductDetailsContent() {
       !Number.isSafeInteger(quantityNumber) ||
       quantityNumber < 1
     ) {
-      alert("Please enter a valid quantity of at least 1.");
+      alert(
+        "Please enter a valid quantity of at least 1."
+      );
       return;
     }
 
-    // ASK CUSTOMER TO CONFIRM DETAILS
+    // REQUIRE LOGIN BEFORE CONFIRMING THE ORDER
+    const signedIn = await ensureSignedIn(submittedForm);
+
+    if (!signedIn) {
+      return;
+    }
+
+    // CUSTOMER CONFIRMATION
     const confirmed = window.confirm(
       `PLEASE CONFIRM YOUR ORDER
 
@@ -137,7 +173,7 @@ Quantity: ${quantity}
 
 CUSTOMER DETAILS
 Name: ${customerName}
-Phone: ${phone}
+Phone Number: ${phone}
 Alternative Contact: ${alternativeName || "Not provided"}
 Alternative Number: ${alternativePhone || "Not provided"}
 
@@ -148,18 +184,17 @@ Delivery Preference: ${deliveryPreference}
 
 Additional Note: ${note || "None"}
 
-Are you sure all the information is correct?
+Are you sure all your information is correct?
 
 Click OK to continue to WhatsApp.
-Click Cancel to edit your information.`
+Click Cancel to make corrections.`
     );
 
-    // STOP IF CUSTOMER CLICKS CANCEL
     if (!confirmed) {
       return;
     }
 
-    // CREATE WHATSAPP MESSAGE
+    // PREPARE WHATSAPP MESSAGE
     const message = `
 Hello SILVA CELEBRITY DEALER!
 
@@ -191,30 +226,26 @@ ADDITIONAL INFORMATION
 
 ${note || "None"}
 
-Please confirm availability, actual phone condition and final price.
+Please confirm availability, actual condition and final price.
 
 Thank you!
 `;
 
-    // OPEN WHATSAPP AFTER CONFIRMATION
     const whatsappURL =
       "https://wa.me/2348137596850?text=" +
       encodeURIComponent(message);
 
+    // CONTINUE TO WHATSAPP
     window.location.href = whatsappURL;
   }
 
-  // PRODUCT NOT FOUND
+  // PHONE NOT FOUND
   if (!product) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-[#080b12] px-6 text-white">
         <h1 className="text-3xl font-black">
           Phone Not Found
         </h1>
-
-        <p className="mt-4 text-gray-400">
-          This phone is not currently listed in our store.
-        </p>
 
         <Link
           href="/"
@@ -228,12 +259,12 @@ Thank you!
 
   return (
     <main className="min-h-screen bg-[#080b12] text-white">
-
       {/* NAVIGATION */}
       <nav className="border-b border-white/10 px-6 py-6">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <Link href="/" className="text-2xl font-black">
-            SILVA<span className="text-blue-500">.</span>
+            SILVA
+            <span className="text-blue-500">.</span>
           </Link>
 
           <Link
@@ -246,10 +277,8 @@ Thank you!
       </nav>
 
       <div className="mx-auto max-w-6xl px-6 py-12">
-
         {/* PHONE INFORMATION */}
         <section className="grid gap-12 md:grid-cols-2">
-
           <div className="overflow-hidden rounded-3xl bg-white p-6">
             <img
               src={product.image}
@@ -259,7 +288,6 @@ Thank you!
           </div>
 
           <div className="flex flex-col justify-center">
-
             <p className="font-bold uppercase tracking-widest text-blue-400">
               {product.brand}
             </p>
@@ -273,8 +301,8 @@ Thank you!
             </p>
 
             <p className="mt-2 text-sm text-gray-500">
-              Listed starting price. Final price depends on
-              selected specifications and availability.
+              Listed starting price. Final price depends
+              on specifications and availability.
             </p>
 
             <p className="mt-6 leading-8 text-gray-400">
@@ -287,9 +315,9 @@ Thank you!
               </h3>
 
               <p className="mt-2 text-sm leading-7 text-gray-300">
-                The condition details below have not yet been
-                verified by SILVA. Confirm the exact device
-                condition before making payment.
+                Review the condition report below.
+                Any details marked &quot;Not yet verified&quot;
+                must be confirmed by SILVA before payment.
               </p>
             </div>
 
@@ -304,7 +332,6 @@ Thank you!
 
         {/* PHONE CONDITION REPORT */}
         <section className="mt-20">
-
           <p className="font-bold uppercase tracking-widest text-blue-400">
             Device Inspection
           </p>
@@ -314,8 +341,8 @@ Thank you!
           </h2>
 
           <p className="mt-4 text-gray-400">
-            Review the available condition information
-            before ordering.
+            You can view the condition report
+            without creating an account.
           </p>
 
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -338,12 +365,11 @@ Thank you!
           </div>
         </section>
 
-        {/* BOOKING FORM */}
+        {/* ORDER FORM */}
         <section
           id="order"
           className="mt-20 rounded-3xl border border-white/10 bg-[#111827] p-6 md:p-12"
         >
-
           <p className="font-bold uppercase tracking-widest text-blue-400">
             Place Your Enquiry
           </p>
@@ -358,11 +384,11 @@ Thank you!
           </p>
 
           <form
+            id="silva-order-form"
             onSubmit={handleOrder}
             className="mt-10 space-y-7"
           >
-
-            {/* PHONE COLOUR */}
+            {/* COLOUR */}
             <div>
               <label
                 htmlFor="color"
@@ -390,7 +416,7 @@ Thank you!
               </select>
             </div>
 
-            {/* STORAGE CAPACITY */}
+            {/* STORAGE */}
             <div>
               <label
                 htmlFor="storage"
@@ -482,7 +508,7 @@ Thank you!
               Customer Information
             </h3>
 
-            {/* FULL NAME */}
+            {/* CUSTOMER NAME */}
             <div>
               <label
                 htmlFor="customerName"
@@ -526,7 +552,7 @@ Thank you!
               />
 
               <p className="mt-2 text-sm text-gray-500">
-                Enter exactly 11 digits, starting with 0.
+                Enter exactly 11 digits starting with 0.
               </p>
             </div>
 
@@ -536,7 +562,7 @@ Thank you!
                 htmlFor="alternativeName"
                 className="mb-3 block font-semibold"
               >
-                Alternative Contact Person's Name
+                Alternative Contact Person&apos;s Name
               </label>
 
               <input
@@ -548,7 +574,7 @@ Thank you!
               />
             </div>
 
-            {/* ALTERNATIVE PHONE NUMBER */}
+            {/* ALTERNATIVE PHONE */}
             <div>
               <label
                 htmlFor="alternativePhone"
@@ -572,8 +598,8 @@ Thank you!
               />
 
               <p className="mt-2 text-sm text-gray-500">
-                Optional. Provide this number only with
-                the person's permission.
+                Optional. Provide this number only
+                with the person&apos;s permission.
               </p>
             </div>
 
@@ -582,7 +608,7 @@ Thank you!
               Delivery Information
             </h3>
 
-            {/* DELIVERY ADDRESS */}
+            {/* ADDRESS */}
             <div>
               <label
                 htmlFor="address"
@@ -672,7 +698,7 @@ Thank you!
               />
             </div>
 
-            {/* SUBMIT ORDER */}
+            {/* SUBMIT BUTTON */}
             <button
               type="submit"
               className="w-full rounded-xl bg-blue-600 px-8 py-5 text-lg font-bold transition hover:bg-blue-700"
@@ -681,9 +707,9 @@ Thank you!
             </button>
 
             <p className="text-center text-sm leading-7 text-gray-400">
-              You will be asked to confirm your details
-              before continuing to WhatsApp.
-              This does not confirm a purchase or reserve stock.
+              A customer account is required to proceed.
+              After signing in, you can review and confirm
+              your order before opening WhatsApp.
             </p>
           </form>
         </section>
@@ -693,21 +719,18 @@ Thank you!
           © 2026 SILVA CELEBRITY DEALER.
           All rights reserved.
         </footer>
-
       </div>
     </main>
   );
 }
 
-// SUSPENSE WRAPPER
+// NEXT.JS SUSPENSE WRAPPER
 export default function ProductDetails() {
   return (
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center bg-[#080b12] text-white">
-          <p className="text-lg font-semibold">
-            Loading phone details...
-          </p>
+          Loading phone details...
         </main>
       }
     >

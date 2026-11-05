@@ -36,11 +36,15 @@ export default function Home() {
       {/* NAVIGATION */}
       <nav className="border-b border-white/10">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5 px-6 py-5">
-          <Link href="/" className="text-xl font-black tracking-tight">
+          <Link
+            href="/"
+            className="text-xl font-black tracking-tight"
+          >
             SILVA<span className="text-blue-500">.</span>
           </Link>
 
-          <div className="hidden gap-6 text-sm text-gray-300 md:flex">
+          {/* NAVIGATION LINKS */}
+          <div className="hidden items-center gap-6 text-sm text-gray-300 md:flex">
             <Link href="/" className="hover:text-blue-400">
               Home
             </Link>
@@ -61,13 +65,15 @@ export default function Home() {
           {/* SEARCH BAR */}
           <form
             onSubmit={handleSearch}
-            className="flex w-full gap-2 md:w-auto md:max-w-md md:flex-1"
+            className="order-3 flex w-full gap-2 lg:order-none lg:max-w-sm lg:flex-1"
           >
             <input
               type="search"
               placeholder="Search for a phone..."
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) =>
+                setSearchQuery(event.target.value)
+              }
               className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#111827] px-4 py-3 text-sm text-white outline-none placeholder:text-gray-500 focus:border-blue-500"
             />
 
@@ -79,6 +85,24 @@ export default function Home() {
             </button>
           </form>
 
+          {/* CUSTOMER ACCOUNT BUTTONS */}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="rounded-lg border border-blue-500 px-4 py-3 text-sm font-bold text-blue-400 transition hover:bg-blue-500 hover:text-white"
+            >
+              Sign In
+            </Link>
+
+            <Link
+              href="/login?mode=signup"
+              className="rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
+            >
+              Sign Up
+            </Link>
+          </div>
+
+          {/* CONTACT */}
           <a
             href="https://wa.me/2348137596850"
             target="_blank"
@@ -90,7 +114,7 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* HERO SECTION */}
+      {/* HERO */}
       <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-24 md:grid-cols-2">
         <div>
           <p className="mb-5 text-sm font-bold uppercase tracking-[0.3em] text-blue-400">
@@ -99,12 +123,15 @@ export default function Home() {
 
           <h1 className="text-5xl font-black leading-tight md:text-7xl">
             Premium Gadgets.
-            <span className="text-blue-500"> Better Deals.</span>
+            <span className="text-blue-500">
+              {" "}Better Deals.
+            </span>
           </h1>
 
           <p className="mt-7 max-w-lg leading-8 text-gray-400">
-            Discover quality smartphones and gadgets at competitive prices.
-            Get the device you want with a buying experience you can trust.
+            Discover quality smartphones and gadgets at
+            competitive prices. Get the device you want
+            with a buying experience you can trust.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-4">
@@ -125,25 +152,34 @@ export default function Home() {
             </a>
           </div>
 
+          {/* STORE FEATURES */}
           <div className="mt-12 flex flex-wrap gap-10">
             <div>
               <p className="text-2xl font-black">Quality</p>
-              <p className="mt-1 text-sm text-gray-500">Gadgets</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Gadgets
+              </p>
             </div>
 
             <div>
               <p className="text-2xl font-black">Great</p>
-              <p className="mt-1 text-sm text-gray-500">Prices</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Prices
+              </p>
             </div>
 
             <div>
-              <p className="text-2xl font-black">Reliable</p>
-              <p className="mt-1 text-sm text-gray-500">Service</p>
+              <p className="text-2xl font-black">
+                Reliable
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Service
+              </p>
             </div>
           </div>
         </div>
 
-        {/* IPHONE 15 PRO MAX HERO IMAGE */}
+        {/* IPHONE 15 PRO MAX IMAGE */}
         <div className="relative">
           <div className="absolute inset-0 rounded-full bg-blue-600/20 blur-[100px]" />
 
@@ -157,8 +193,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* PRODUCTS SECTION */}
-      <section id="products" className="bg-[#0d121d] px-6 py-24">
+      {/* PRODUCTS */}
+      <section
+        id="products"
+        className="bg-[#0d121d] px-6 py-24"
+      >
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 flex flex-wrap items-end justify-between gap-5">
             <div>
@@ -180,7 +219,7 @@ export default function Home() {
             </span>
           </div>
 
-          {/* AVAILABLE PHONES */}
+          {/* PHONE CARDS */}
           <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-4">
             {filteredProducts.map((product) => (
               <div
@@ -226,7 +265,7 @@ export default function Home() {
             ))}
           </div>
 
-          {/* PHONE NOT AVAILABLE — REQUEST FEATURE */}
+          {/* REQUEST A PHONE THAT IS NOT LISTED */}
           {filteredProducts.length === 0 &&
             searchQuery.trim() !== "" && (
               <div className="rounded-2xl border border-blue-500/30 bg-[#111827] px-6 py-12 text-center">
@@ -243,22 +282,22 @@ export default function Home() {
                 </h3>
 
                 <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-gray-300">
-                  This phone is not available right now, but you
-                  can book it and wait for SILVA to get it for you.
+                  This phone is not available right now,
+                  but you can book it and wait for SILVA
+                  to get it for you.
                 </p>
 
                 <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-gray-500">
-                  You can tell us your preferred colour, storage
-                  capacity, phone condition and quantity.
-                  SILVA will confirm availability, price and
-                  delivery time.
+                  Tell us your preferred colour, storage,
+                  condition and quantity. SILVA will confirm
+                  availability, price and delivery time.
                 </p>
 
                 <Link
                   href={`/request?phone=${encodeURIComponent(
                     searchQuery.trim()
                   )}`}
-                  className="mt-8 inline-block rounded-xl bg-blue-600 px-8 py-4 font-bold transition hover:bg-blue-700"
+                  className="mt-8 inline-block rounded-xl bg-blue-600 px-8 py-4 font-bold hover:bg-blue-700"
                 >
                   Request This Phone →
                 </Link>
@@ -277,8 +316,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ABOUT SECTION */}
-      <section id="about" className="mx-auto max-w-7xl px-6 py-24">
+      {/* ABOUT */}
+      <section
+        id="about"
+        className="mx-auto max-w-7xl px-6 py-24"
+      >
         <div className="max-w-3xl">
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-blue-400">
             Who we are
@@ -289,11 +331,11 @@ export default function Home() {
           </h2>
 
           <p className="mt-6 leading-8 text-gray-400">
-            At SILVA CELEBRITY DEALER, we believe buying a gadget
-            should be simple and straightforward. We connect
-            customers with smartphones and other gadgets while
-            providing a convenient way to make enquiries
-            and place orders.
+            At SILVA CELEBRITY DEALER, we believe buying
+            a gadget should be simple and straightforward.
+            We connect customers with smartphones and
+            other gadgets while providing a convenient
+            way to make enquiries and place orders.
           </p>
         </div>
       </section>
@@ -301,14 +343,16 @@ export default function Home() {
       {/* DEALER PROFILE */}
       <section className="bg-[#0d121d] px-6 py-20">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-10 md:flex-row">
-          <div className="w-full md:w-1/2">
+          {/* CLEARER SILVA PROFILE PICTURE */}
+          <div className="flex w-full items-center justify-center rounded-2xl border border-white/10 bg-[#111827] p-12 md:w-1/2">
             <img
               src="/silva-profile.jpg"
               alt="Silva Celebrity Dealer"
-              className="h-[450px] w-full rounded-2xl object-cover"
+              className="h-40 w-40 rounded-full border-4 border-blue-500 object-cover shadow-lg shadow-blue-500/20"
             />
           </div>
 
+          {/* DEALER INFORMATION */}
           <div className="w-full text-center md:w-1/2 md:text-left">
             <p className="mb-4 font-bold uppercase tracking-[0.3em] text-blue-400">
               Meet Your Gadget Plug
@@ -323,8 +367,8 @@ export default function Home() {
             </h2>
 
             <p className="mt-6 leading-8 text-gray-400">
-              Your trusted destination for quality gadgets
-              and premium smartphones.
+              Your trusted destination for quality
+              gadgets and premium smartphones.
             </p>
 
             <a
@@ -339,7 +383,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CONTACT SECTION */}
+      {/* CONTACT */}
       <section
         id="contact"
         className="bg-blue-600 px-6 py-20 text-center"

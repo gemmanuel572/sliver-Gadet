@@ -2,36 +2,59 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, type FormEvent } from "react";
+import {
+  Suspense,
+  useEffect,
+  type FormEvent,
+} from "react";
+import {
+  ensureSignedIn,
+  restorePendingOrder,
+} from "@/lib/order-auth";
 
-// INPUT STYLING
 const inputStyle =
   "w-full rounded-xl border border-white/10 bg-[#080b12] px-4 py-4 text-white outline-none focus:border-blue-500";
 
-// VALIDATE NIGERIAN PHONE NUMBERS
+// VALIDATE PHONE NUMBER
 function isValidPhone(number: string) {
   return /^0[0-9]{10}$/.test(number);
 }
 
-// ALLOW ONLY DIGITS
+// ALLOW DIGITS ONLY
 function handlePhoneInput(event: FormEvent<HTMLInputElement>) {
   event.currentTarget.value = event.currentTarget.value
     .replace(/\D/g, "")
     .slice(0, 11);
 }
 
-// PHONE REQUEST COMPONENT
 function PhoneRequestContent() {
   const searchParams = useSearchParams();
 
   const requestedPhone =
-    searchParams.get("phone")?.trim() || "";
+    (searchParams.get("phone") || "")
+      .trim()
+      .slice(0, 120);
+
+  // RESTORE CUSTOMER INFORMATION AFTER LOGIN
+  useEffect(() => {
+    const form = document.getElementById(
+      "silva-order-form"
+    );
+
+    if (form instanceof HTMLFormElement) {
+      restorePendingOrder(form);
+    }
+  }, [requestedPhone]);
 
   // HANDLE PHONE REQUEST
-  function handleRequest(event: FormEvent<HTMLFormElement>) {
+  async function handleRequest(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
-    const form = new FormData(event.currentTarget);
+    const submittedForm = event.currentTarget;
+
+    const form = new FormData(submittedForm);
 
     const getValue = (name: string) =>
       String(form.get(name) || "").trim();
@@ -52,25 +75,28 @@ function PhoneRequestContent() {
     // DELIVERY DETAILS
     const address = getValue("address");
     const location = getValue("location");
-    const deliveryPreference = getValue("deliveryPreference");
+    const deliveryPreference = getValue(
+      "deliveryPreference"
+    );
 
     const note = getValue("note");
 
     // VALIDATE MAIN PHONE NUMBER
     if (!isValidPhone(phone)) {
       alert(
-        "Please enter a valid Nigerian phone number containing exactly 11 digits and starting with 0."
+        "Enter a valid Nigerian phone number: " +
+          "exactly 11 digits starting with 0."
       );
       return;
     }
 
-    // VALIDATE ALTERNATIVE NUMBER
+    // VALIDATE ALTERNATIVE PHONE NUMBER
     if (
       alternativePhone &&
       !isValidPhone(alternativePhone)
     ) {
       alert(
-        "Please enter a valid 11-digit alternative phone number."
+        "Enter a valid 11-digit alternative phone number."
       );
       return;
     }
@@ -78,9 +104,12 @@ function PhoneRequestContent() {
     // VALIDATE CUSTOMER NAME
     const namePattern = /^[\p{L}\s'.-]+$/u;
 
-    if (!customerName || !namePattern.test(customerName)) {
+    if (
+      !customerName ||
+      !namePattern.test(customerName)
+    ) {
       alert(
-        "Please enter a valid full name using letters, not numbers."
+        "Please enter a valid full name using letters."
       );
       return;
     }
@@ -102,7 +131,16 @@ function PhoneRequestContent() {
       !Number.isSafeInteger(quantityNumber) ||
       quantityNumber < 1
     ) {
-      alert("Please enter a valid quantity of at least 1.");
+      alert(
+        "Please enter a valid quantity of at least 1."
+      );
+      return;
+    }
+
+    // REQUIRE CUSTOMER LOGIN
+    const signedIn = await ensureSignedIn(submittedForm);
+
+    if (!signedIn) {
       return;
     }
 
@@ -136,12 +174,11 @@ Click OK to continue to WhatsApp.
 Click Cancel to make corrections.`
     );
 
-    // STOP IF CUSTOMER CLICKS CANCEL
     if (!confirmed) {
       return;
     }
 
-    // CREATE WHATSAPP MESSAGE
+    // PREPARE WHATSAPP MESSAGE
     const message = `
 Hello SILVA CELEBRITY DEALER!
 
@@ -174,7 +211,7 @@ ${note || "None"}
 
 Please confirm if you can get this phone for me.
 
-Kindly confirm the price, availability, phone condition and estimated delivery time.
+Kindly confirm availability, pricing, actual condition and estimated delivery time.
 
 Thank you!
 `;
@@ -189,12 +226,15 @@ Thank you!
 
   return (
     <main className="min-h-screen bg-[#080b12] text-white">
-
       {/* NAVIGATION */}
       <nav className="border-b border-white/10 px-6 py-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="text-2xl font-black">
-            SILVA<span className="text-blue-500">.</span>
+          <Link
+            href="/"
+            className="text-2xl font-black"
+          >
+            SILVA
+            <span className="text-blue-500">.</span>
           </Link>
 
           <Link
@@ -207,10 +247,8 @@ Thank you!
       </nav>
 
       <div className="mx-auto max-w-4xl px-6 py-12">
-
-        {/* PHONE REQUEST INFORMATION */}
+        {/* REQUEST INFORMATION */}
         <section className="rounded-3xl border border-white/10 bg-[#111827] p-8 text-center">
-
           <div className="mx-auto flex h-36 w-36 items-center justify-center rounded-2xl bg-[#080b12] text-7xl">
             📱
           </div>
@@ -220,7 +258,8 @@ Thank you!
           </p>
 
           <h1 className="mt-4 break-words text-3xl font-black md:text-5xl">
-            {requestedPhone || "Request Your Preferred Phone"}
+            {requestedPhone ||
+              "Request Your Preferred Phone"}
           </h1>
 
           <p className="mx-auto mt-6 max-w-xl leading-8 text-gray-400">
@@ -230,14 +269,14 @@ Thank you!
           </p>
 
           <div className="mt-8 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-5">
-
             <h3 className="font-bold text-yellow-400">
               Availability Not Confirmed
             </h3>
 
             <p className="mt-3 text-sm leading-7 text-gray-300">
-              The phone's availability, price, specifications
-              and condition have not yet been confirmed.
+              The phone&apos;s availability, price,
+              specifications and condition have not
+              yet been confirmed.
             </p>
           </div>
 
@@ -247,7 +286,6 @@ Thank you!
           >
             Complete Your Request →
           </a>
-
         </section>
 
         {/* PHONE REQUEST FORM */}
@@ -255,7 +293,6 @@ Thank you!
           id="request-form"
           className="mt-12 rounded-3xl border border-white/10 bg-[#111827] p-6 md:p-10"
         >
-
           <p className="font-bold uppercase tracking-widest text-blue-400">
             Book Your Preferred Phone
           </p>
@@ -271,10 +308,10 @@ Thank you!
           </p>
 
           <form
+            id="silva-order-form"
             onSubmit={handleRequest}
             className="mt-10 space-y-7"
           >
-
             {/* PHONE NAME */}
             <div>
               <label
@@ -288,6 +325,7 @@ Thank you!
                 id="phoneModel"
                 name="phoneModel"
                 type="text"
+                key={requestedPhone}
                 defaultValue={requestedPhone}
                 placeholder="e.g. iPhone 16 Pro Max"
                 maxLength={120}
@@ -296,7 +334,7 @@ Thank you!
               />
             </div>
 
-            {/* PREFERRED COLOUR */}
+            {/* COLOUR */}
             <div>
               <label
                 htmlFor="color"
@@ -326,7 +364,7 @@ Thank you!
               </datalist>
             </div>
 
-            {/* STORAGE CAPACITY */}
+            {/* STORAGE */}
             <div>
               <label
                 htmlFor="storage"
@@ -371,7 +409,7 @@ Thank you!
                 className={inputStyle}
               >
                 <option value="" disabled>
-                  Choose preferred condition
+                  Select preferred condition
                 </option>
 
                 <option value="Brand New">
@@ -418,7 +456,7 @@ Thank you!
               Customer Information
             </h3>
 
-            {/* FULL NAME */}
+            {/* NAME */}
             <div>
               <label
                 htmlFor="customerName"
@@ -437,7 +475,7 @@ Thank you!
               />
             </div>
 
-            {/* MAIN PHONE NUMBER */}
+            {/* MAIN PHONE */}
             <div>
               <label
                 htmlFor="phone"
@@ -466,13 +504,13 @@ Thank you!
               </p>
             </div>
 
-            {/* ALTERNATIVE CONTACT NAME */}
+            {/* ALTERNATIVE CONTACT */}
             <div>
               <label
                 htmlFor="alternativeName"
                 className="mb-3 block font-semibold"
               >
-                Alternative Contact Person's Name
+                Alternative Contact Person&apos;s Name
               </label>
 
               <input
@@ -484,7 +522,7 @@ Thank you!
               />
             </div>
 
-            {/* ALTERNATIVE PHONE NUMBER */}
+            {/* ALTERNATIVE NUMBER */}
             <div>
               <label
                 htmlFor="alternativePhone"
@@ -509,7 +547,7 @@ Thank you!
 
               <p className="mt-2 text-sm text-gray-500">
                 Optional. Provide this number only
-                with the person's permission.
+                with the person&apos;s permission.
               </p>
             </div>
 
@@ -518,7 +556,7 @@ Thank you!
               Delivery Information
             </h3>
 
-            {/* DELIVERY ADDRESS */}
+            {/* ADDRESS */}
             <div>
               <label
                 htmlFor="address"
@@ -537,7 +575,7 @@ Thank you!
               />
             </div>
 
-            {/* CUSTOMER LOCATION */}
+            {/* LOCATION */}
             <div>
               <label
                 htmlFor="location"
@@ -608,7 +646,7 @@ Thank you!
               />
             </div>
 
-            {/* SUBMIT REQUEST */}
+            {/* SUBMIT */}
             <button
               type="submit"
               className="w-full rounded-xl bg-blue-600 px-8 py-5 text-lg font-bold transition hover:bg-blue-700"
@@ -617,10 +655,9 @@ Thank you!
             </button>
 
             <p className="text-center text-sm leading-7 text-gray-400">
-              You will be asked to confirm your information
-              before continuing to WhatsApp.
-              SILVA must confirm availability, pricing
-              and delivery arrangements.
+              You must sign in before submitting
+              your phone request. SILVA will confirm
+              availability, price and delivery time.
             </p>
           </form>
         </section>
@@ -630,21 +667,18 @@ Thank you!
           © 2026 SILVA CELEBRITY DEALER.
           All rights reserved.
         </footer>
-
       </div>
     </main>
   );
 }
 
-// SUSPENSE WRAPPER
+// NEXT.JS SUSPENSE WRAPPER
 export default function RequestPage() {
   return (
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center bg-[#080b12] text-white">
-          <p className="text-lg font-semibold">
-            Loading phone request...
-          </p>
+          Loading phone request...
         </main>
       }
     >
