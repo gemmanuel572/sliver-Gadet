@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { products } from "@/data/products";
+import { useProducts } from "@/hooks/use-products";
+import { isReportVerified } from "@/lib/phone-conditions";
+import OrdersPanel from "@/components/orders-panel";
+import PhoneConditionReport from "@/components/phone-condition-report";
 
 const productBadges: Record<string, string> = {
   "iphone-15-pro-max": "BEST SELLER",
@@ -15,6 +18,7 @@ const heroImage =
   "https://static01.galaxus.com/productimages/4/9/9/6/7/0/2/9/6/2/5/8/8/2/3/0/7/7/a3ca2b7a-b182-49e1-80e3-eda7d00c55c0.jpg_sea.jpeg";
 
 export default function Home() {
+  const { products, loading, error, newPhones, dismissNotification } = useProducts(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredProducts = products.filter((product) =>
@@ -33,6 +37,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#080b12] text-white">
+      {newPhones.length > 0 && (
+        <div role="status" aria-live="polite" className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-4 bg-blue-600 px-6 py-4 text-sm shadow-lg">
+          <span>{newPhones.length === 1 ? `New phone uploaded: ${newPhones[0].name}` : `${newPhones.length} new phones have been uploaded!`}</span>
+          <Link href={`/products/${newPhones[0].id}`} className="font-bold underline" onClick={dismissNotification}>View phone →</Link>
+          <button type="button" onClick={dismissNotification} aria-label="Dismiss new phone notification" className="rounded border border-white/40 px-3 py-1">Dismiss</button>
+        </div>
+      )}
       {/* NAVIGATION */}
       <nav className="border-b border-white/10">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5 px-6 py-5">
@@ -87,6 +98,8 @@ export default function Home() {
 
           {/* CUSTOMER ACCOUNT BUTTONS */}
           <div className="flex items-center gap-3">
+            <Link href="#my-orders" className="text-sm font-bold text-blue-400">My Orders</Link>
+            <Link href="/swap" className="text-sm font-bold text-blue-400">Swap Deal</Link>
             <Link
               href="/login"
               className="rounded-lg border border-blue-500 px-4 py-3 text-sm font-bold text-blue-400 transition hover:bg-blue-500 hover:text-white"
@@ -220,6 +233,9 @@ export default function Home() {
           </div>
 
           {/* PHONE CARDS */}
+          {loading && <p role="status" className="mb-6 text-gray-400">Loading available phones…</p>}
+          {!loading && !error && products.length === 0 && <p className="mb-6 text-gray-400">No phones are currently available. Contact SILVA to request a phone.</p>}
+          {error && <p role="status" className="mb-6 text-sm text-yellow-400">{error}</p>}
           <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-4">
             {filteredProducts.map((product) => (
               <div
@@ -235,7 +251,7 @@ export default function Home() {
                     />
 
                     <span className="absolute left-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold">
-                      {productBadges[product.id] || "AVAILABLE"}
+                      {productBadges[product.id] || "NEW ARRIVAL"}
                     </span>
                   </div>
                 </Link>
@@ -249,6 +265,14 @@ export default function Home() {
                   <h3 className="mt-3 text-lg font-bold">
                     {product.name}
                   </h3>
+                  <p className={`mt-2 text-xs ${isReportVerified(product.conditions) ? "text-green-400" : "text-yellow-400"}`}>
+                    {isReportVerified(product.conditions) ? "Inspection complete" : "Condition checks pending"}
+                  </p>
+                  <details className="mt-3 rounded-lg border border-white/10 bg-[#080b12] p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-blue-400">View Phone Conditions</summary>
+                    <div className="mt-4"><PhoneConditionReport conditions={product.conditions} compact /></div>
+                    <Link href={`/products/${product.id}#condition-report`} className="mt-3 inline-block text-xs text-blue-400 underline">Open full condition report →</Link>
+                  </details>
 
                   <p className="mt-3 text-xl font-black">
                     ₦{product.price.toLocaleString("en-NG")}
@@ -316,6 +340,13 @@ export default function Home() {
         </div>
       </section>
 
+      <OrdersPanel />
+      <section className="mx-auto max-w-7xl px-6 py-14">
+        <div className="rounded-2xl border border-blue-500/30 bg-[#111827] p-8 md:flex md:items-center md:justify-between md:gap-8">
+          <div><p className="font-bold uppercase tracking-widest text-blue-400">Swap Deal</p><h2 className="mt-3 text-3xl font-black">Swap your current phone for the one you want.</h2><p className="mt-4 max-w-2xl leading-7 text-gray-400">Tell SILVA what you have and what you want. Discuss your options on WhatsApp or arrange to meet at the shop.</p></div>
+          <Link href="/swap" className="mt-6 inline-block shrink-0 rounded-xl bg-blue-600 px-6 py-4 font-bold hover:bg-blue-700 md:mt-0">Request a Swap →</Link>
+        </div>
+      </section>
       {/* ABOUT */}
       <section
         id="about"

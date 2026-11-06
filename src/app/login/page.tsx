@@ -184,10 +184,9 @@ function LoginContent() {
 
           <div className="mt-8 border-t border-white/10 pt-7">
             <p className="text-center text-sm leading-7 text-gray-500">
-              Create an account to manage orders,
-              track phone requests and view your
-              purchase history when those features
-              become available.
+              Sign in to view your orders, track special
+              phone requests and verify your deliveries
+              from the homepage.
             </p>
           </div>
         </div>

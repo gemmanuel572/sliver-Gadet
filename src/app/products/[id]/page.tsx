@@ -7,25 +7,15 @@ import {
   useEffect,
   type FormEvent,
 } from "react";
-import { products } from "@/data/products";
+import { useProducts } from "@/hooks/use-products";
+import { isReportVerified } from "@/lib/phone-conditions";
+import { useOrderSubmission } from "@/hooks/use-order-submission";
+import PaymentDetails from "@/components/payment-details";
+import PhoneConditionReport from "@/components/phone-condition-report";
 import {
   ensureSignedIn,
   restorePendingOrder,
 } from "@/lib/order-auth";
-
-const conditionLabels: Record<string, string> = {
-  batteryHealth: "Battery Health",
-  screen: "Screen Condition",
-  faceIdOrFingerprint: "Face ID / Fingerprint",
-  cameras: "Cameras",
-  speakers: "Speakers",
-  microphone: "Microphone",
-  chargingPort: "Charging Port",
-  network: "Network",
-  wifi: "Wi-Fi",
-  bluetooth: "Bluetooth",
-  trueTone: "True Tone",
-};
 
 const inputStyle =
   "w-full rounded-xl border border-white/10 bg-[#080b12] px-4 py-4 text-white outline-none focus:border-blue-500";
@@ -44,6 +34,8 @@ function handlePhoneInput(event: FormEvent<HTMLInputElement>) {
 
 function ProductDetailsContent() {
   const params = useParams();
+  const { products, loading, error } = useProducts();
+  const { saveOrder, saving } = useOrderSubmission();
 
   const product = products.find(
     (item) => item.id === params.id
@@ -57,6 +49,9 @@ function ProductDetailsContent() {
 
     if (form instanceof HTMLFormElement) {
       restorePendingOrder(form);
+    }
+    if (window.location.hash === "#condition-report") {
+      document.getElementById("condition-report")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [product?.id]);
 
@@ -194,9 +189,14 @@ Click Cancel to make corrections.`
       return;
     }
 
+    const saved = await saveOrder(form, product.id);
+    if (!("orderId" in saved)) { alert(saved.error); return; }
+
     // PREPARE WHATSAPP MESSAGE
     const message = `
 Hello SILVA CELEBRITY DEALER!
+
+Order Reference: ${saved.orderId}
 
 I would like to enquire about this phone.
 
@@ -236,7 +236,7 @@ Thank you!
       encodeURIComponent(message);
 
     // CONTINUE TO WHATSAPP
-    window.location.href = whatsappURL;
+    window.location.assign(whatsappURL);
   }
 
   // PHONE NOT FOUND
@@ -244,8 +244,9 @@ Thank you!
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-[#080b12] px-6 text-white">
         <h1 className="text-3xl font-black">
-          Phone Not Found
+          {loading ? "Loading phone details…" : error ? "Unable to load this phone" : "Phone unavailable or no longer listed"}
         </h1>
+        {error && <p role="alert" className="mt-4 text-gray-400">{error}</p>}
 
         <Link
           href="/"
@@ -285,6 +286,7 @@ Thank you!
               alt={product.name}
               className="h-[400px] w-full object-contain"
             />
+            {product.images && product.images.length > 1 && <div className="mt-4 grid grid-cols-3 gap-3">{product.images.slice(1).map((image, index) => <a key={image} href={image} target="_blank" rel="noreferrer"><img src={image} alt={`${product.name} photo ${index + 2}`} className="h-28 w-full rounded-lg object-contain" /></a>)}</div>}
           </div>
 
           <div className="flex flex-col justify-center">
@@ -311,13 +313,13 @@ Thank you!
 
             <div className="mt-8 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-5">
               <h3 className="font-bold text-yellow-400">
-                Important Condition Information
+                {isReportVerified(product.conditions) ? "Inspection Complete" : "Important Condition Information"}
               </h3>
 
               <p className="mt-2 text-sm leading-7 text-gray-300">
-                Review the condition report below.
-                Any details marked &quot;Not yet verified&quot;
-                must be confirmed by SILVA before payment.
+                {isReportVerified(product.conditions)
+                  ? "SILVA has recorded every inspection result. Review the report below for actual condition, faults or replaced parts before payment."
+                  : 'Review the condition report below. Any details marked "Not yet verified" must be confirmed by SILVA before payment.'}
               </p>
             </div>
 
@@ -331,7 +333,7 @@ Thank you!
         </section>
 
         {/* PHONE CONDITION REPORT */}
-        <section className="mt-20">
+        <section id="condition-report" className="mt-20 scroll-mt-6">
           <p className="font-bold uppercase tracking-widest text-blue-400">
             Device Inspection
           </p>
@@ -345,24 +347,7 @@ Thank you!
             without creating an account.
           </p>
 
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(product.conditions).map(
-              ([key, value]) => (
-                <div
-                  key={key}
-                  className="rounded-2xl border border-white/10 bg-[#111827] p-6"
-                >
-                  <p className="text-sm text-gray-400">
-                    {conditionLabels[key] || key}
-                  </p>
-
-                  <p className="mt-3 text-lg font-bold">
-                    {value}
-                  </p>
-                </div>
-              )
-            )}
-          </div>
+          <div className="mt-8"><PhoneConditionReport conditions={product.conditions} /></div>
         </section>
 
         {/* ORDER FORM */}
@@ -388,6 +373,7 @@ Thank you!
             onSubmit={handleOrder}
             className="mt-10 space-y-7"
           >
+            <PaymentDetails />
             {/* COLOUR */}
             <div>
               <label
@@ -701,9 +687,10 @@ Thank you!
             {/* SUBMIT BUTTON */}
             <button
               type="submit"
+              disabled={saving}
               className="w-full rounded-xl bg-blue-600 px-8 py-5 text-lg font-bold transition hover:bg-blue-700"
             >
-              Review and Submit Order →
+              {saving ? "Saving Order…" : "Review and Submit Order →"}
             </button>
 
             <p className="text-center text-sm leading-7 text-gray-400">

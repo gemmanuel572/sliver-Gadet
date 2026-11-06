@@ -11,6 +11,8 @@ import {
   ensureSignedIn,
   restorePendingOrder,
 } from "@/lib/order-auth";
+import { useOrderSubmission } from "@/hooks/use-order-submission";
+import PaymentDetails from "@/components/payment-details";
 
 const inputStyle =
   "w-full rounded-xl border border-white/10 bg-[#080b12] px-4 py-4 text-white outline-none focus:border-blue-500";
@@ -28,6 +30,7 @@ function handlePhoneInput(event: FormEvent<HTMLInputElement>) {
 }
 
 function PhoneRequestContent() {
+  const { saveOrder, saving } = useOrderSubmission();
   const searchParams = useSearchParams();
 
   const requestedPhone =
@@ -177,10 +180,14 @@ Click Cancel to make corrections.`
     if (!confirmed) {
       return;
     }
+    const saved = await saveOrder(form, null);
+    if (!("orderId" in saved)) { alert(saved.error); return; }
 
     // PREPARE WHATSAPP MESSAGE
     const message = `
 Hello SILVA CELEBRITY DEALER!
+
+Order Reference: ${saved.orderId}
 
 I want to request a phone that is not currently listed on your website.
 
@@ -221,7 +228,7 @@ Thank you!
       "https://wa.me/2348137596850?text=" +
       encodeURIComponent(message);
 
-    window.location.href = whatsappURL;
+    window.location.assign(whatsappURL);
   }
 
   return (
@@ -312,6 +319,7 @@ Thank you!
             onSubmit={handleRequest}
             className="mt-10 space-y-7"
           >
+            <PaymentDetails />
             {/* PHONE NAME */}
             <div>
               <label
@@ -649,9 +657,10 @@ Thank you!
             {/* SUBMIT */}
             <button
               type="submit"
+              disabled={saving}
               className="w-full rounded-xl bg-blue-600 px-8 py-5 text-lg font-bold transition hover:bg-blue-700"
             >
-              Review and Submit Phone Request →
+              {saving ? "Saving Request…" : "Review and Submit Phone Request →"}
             </button>
 
             <p className="text-center text-sm leading-7 text-gray-400">
