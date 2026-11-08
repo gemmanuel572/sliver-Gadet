@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { advanceOrder, getOrders, markRequestAvailable, verifyDelivery } from "@/app/orders/actions";
 import { orderStatusLabels, type CustomerOrder } from "@/lib/orders";
 import PaymentDetails from "./payment-details";
+import { MarkOrderNotificationsRead, OrderNotificationBadge } from "@/app/admin/components/order-notifications";
 
 export default function OrdersPanel({ admin = false, requestsOnly = false }: { admin?: boolean; requestsOnly?: boolean }) {
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -83,7 +84,8 @@ export default function OrdersPanel({ admin = false, requestsOnly = false }: { a
   const awaiting = active.filter(order => order.status === "awaiting_confirmation");
 
   return <section id={admin ? requestsOnly ? "special-requests" : "customer-orders" : "my-orders"} className={admin ? "mt-16 scroll-mt-6" : "mx-auto w-full max-w-7xl scroll-mt-6 px-6 py-10"}>
-    <h2 className="text-2xl font-black">{admin ? requestsOnly ? "Special Requests" : "Customer Orders" : "My Orders"}</h2>
+    <h2 className="text-2xl font-black">{admin ? requestsOnly ? "Special Requests" : "Customer Orders" : "My Orders"}{admin && <OrderNotificationBadge kind={requestsOnly ? "request" : "product"} />}</h2>
+    {admin && !loading && !error && <MarkOrderNotificationsRead kind={requestsOnly ? "request" : "product"} />}
     {admin && requestsOnly && <p className="mt-3 text-sm text-gray-400">Requests stay active until delivery is verified. When you source a phone, choose Already Available and upload it to the website.</p>}
     {loading && <p role="status" className="mt-4 text-gray-400">Loading orders…</p>}
     {!admin && unavailable && <div role="status" className="mt-4 rounded-xl border border-white/10 bg-[#111827] p-5"><p className="text-gray-300">Order tracking is temporarily unavailable.</p><p className="mt-2 text-sm text-gray-400">You can contact SILVA for an update on your order.</p><a href="https://wa.me/2348137596850" target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-blue-400 underline">Chat with SILVA on WhatsApp</a><button type="button" onClick={() => void refresh()} className="ml-5 text-sm text-blue-400 underline">Try Again</button></div>}

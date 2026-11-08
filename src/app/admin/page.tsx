@@ -7,6 +7,7 @@ import PhoneUpload from "./components/phone-upload";
 import PhoneConditionManager from "./components/phone-conditions";
 import OrdersPanel from "@/components/orders-panel";
 import RegisteredCustomers from "./components/registered-customers";
+import { OrderNotificationsProvider, OrderNotificationBadge, OrderNotificationLink } from "./components/order-notifications";
 
 async function AdminDashboardContent() {
   const supabase = await createClient();
@@ -79,6 +80,7 @@ async function AdminDashboardContent() {
 
   // STEP 3: DISPLAY ADMIN DASHBOARD
   return (
+    <OrderNotificationsProvider adminId={user.id}>
     <main className="min-h-screen bg-[#080b12] text-white">
       {/* ADMIN HEADER */}
       <header className="border-b border-white/10 bg-[#111827] px-6 py-6">
@@ -151,11 +153,11 @@ async function AdminDashboardContent() {
             {/* ORDERS */}
             <div className="rounded-2xl border border-white/10 bg-[#111827] p-6">
               <p className="text-sm text-gray-400">
-                Customer Orders
+                Customer Orders <OrderNotificationBadge kind="product" />
               </p>
 
               <p className="mt-4 text-lg font-bold">
-                <Link href="#customer-orders" className="text-blue-400 underline">View Orders</Link>
+                <OrderNotificationLink kind="product" className="text-blue-400 underline">View Orders</OrderNotificationLink>
               </p>
 
               <p className="mt-2 text-xs text-gray-500">
@@ -166,11 +168,11 @@ async function AdminDashboardContent() {
             {/* SPECIAL REQUESTS */}
             <div className="rounded-2xl border border-white/10 bg-[#111827] p-6">
               <p className="text-sm text-gray-400">
-                Special Requests
+                Special Requests <OrderNotificationBadge kind="request" />
               </p>
 
               <p className="mt-4 text-lg font-bold">
-                <Link href="#special-requests" className="text-blue-400 underline">View Requests</Link>
+                <OrderNotificationLink kind="request" className="text-blue-400 underline">View Requests</OrderNotificationLink>
               </p>
 
               <p className="mt-2 text-xs text-gray-500">
@@ -203,14 +205,14 @@ async function AdminDashboardContent() {
             </div>
             <PhoneConditionManager />
             <div className="rounded-2xl border border-white/10 bg-[#111827] p-7">
-              <div className="mb-5 text-3xl">🛒</div><h3 className="text-xl font-bold">Customer Orders</h3>
+              <div className="mb-5 text-3xl">🛒</div><h3 className="text-xl font-bold">Customer Orders <OrderNotificationBadge kind="product" /></h3>
               <p className="mt-3 text-sm leading-7 text-gray-400">See customer orders, confirm bookings and mark deliveries for customer verification.</p>
-              <Link href="#customer-orders" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold">Manage Orders</Link>
+              <OrderNotificationLink kind="product" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold">Manage Orders</OrderNotificationLink>
             </div>
             <div className="rounded-2xl border border-white/10 bg-[#111827] p-7">
-              <div className="mb-5 text-3xl">📋</div><h3 className="text-xl font-bold">Special Requests</h3>
+              <div className="mb-5 text-3xl">📋</div><h3 className="text-xl font-bold">Special Requests <OrderNotificationBadge kind="request" /></h3>
               <p className="mt-3 text-sm leading-7 text-gray-400">Keep requested phones here until you source and deliver them. Upload a phone when it becomes available.</p>
-              <Link href="#special-requests" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold">Manage Special Requests</Link>
+              <OrderNotificationLink kind="request" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold">Manage Special Requests</OrderNotificationLink>
             </div>
             {[
               {
@@ -255,6 +257,7 @@ async function AdminDashboardContent() {
         Admin Dashboard.
       </footer>
     </main>
+    </OrderNotificationsProvider>
   );
 }
 
