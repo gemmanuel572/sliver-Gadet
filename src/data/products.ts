@@ -9,19 +9,8 @@ export type Product = {
   description: string;
   colors: string[];
   storage: string[];
-  conditions: {
-    batteryHealth: string;
-    screen: string;
-    faceIdOrFingerprint: string;
-    cameras: string;
-    speakers: string;
-    microphone: string;
-    chargingPort: string;
-    network: string;
-    wifi: string;
-    bluetooth: string;
-    trueTone: string;
-  };
+  conditions: Record<string, string>;
+  conditionLabels?: Record<string, string>;
 };
 
 export const products: Product[] = [

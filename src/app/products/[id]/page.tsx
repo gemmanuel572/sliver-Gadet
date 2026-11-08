@@ -347,7 +347,7 @@ Thank you!
             without creating an account.
           </p>
 
-          <div className="mt-8"><PhoneConditionReport conditions={product.conditions} /></div>
+          <div className="mt-8"><PhoneConditionReport conditions={product.conditions} labels={product.conditionLabels} /></div>
         </section>
 
         {/* ORDER FORM */}

@@ -20,7 +20,7 @@ const orderId = "11111111-1111-4111-8111-111111111111";
 const requestId = "22222222-2222-4222-8222-222222222222";
 const customerId = "33333333-3333-4333-8333-333333333333";
 
-function setup({ admin = false, user = true, booked = false, existing = false, writeError = false, readError = false, orderStatus = "awaiting_confirmation", owner = customerId, kind = "request" } = {}) {
+function setup({ admin = false, user = true, booked = false, removed = false, overrides = {}, existing = false, writeError = false, readError = false, orderStatus = "awaiting_confirmation", owner = customerId, kind = "request" } = {}) {
   const calls = { writes: [], filters: [], rpc: [] };
   const client = {
     auth: { getUser: async () => ({ data: { user: user ? { id: customerId, email: "customer@example.com" } : null } }) },
@@ -31,7 +31,7 @@ function setup({ admin = false, user = true, booked = false, existing = false, w
       const run = async (single = false) => {
         calls.filters.push({ table, filters: [...filters], operation });
         if (table === "admin_users") return { data: admin ? { user_id: customerId } : null };
-        if (table === "phone_availability") return { data: { booked } };
+        if (table === "phone_availability") return { data: { booked, is_removed: removed, overrides } };
         if (table === "customer_orders" && operation === "select" && readError) return { error: { code: "PGRST205", message: "Table missing" } };
         if (operation === "insert" || operation === "upsert") {
           if (writeError) return { error: { message: "Database unavailable" } };
@@ -62,7 +62,7 @@ function setup({ admin = false, user = true, booked = false, existing = false, w
     },
     rpc: async (name, args) => { calls.rpc.push({ name, args }); return writeError ? { error: new Error("RPC failed") } : { data: orderId }; },
   };
-  const actions = compile("../src/app/orders/actions.ts", { "@/lib/supabase/server": { createClient: async () => client }, "@/data/products": productsModule });
+  const actions = compile("../src/app/orders/actions.ts", { "@/lib/supabase/server": { createClient: async () => client }, "@/data/products": productsModule, "@/lib/inventory": compile("../src/lib/inventory.ts"), "@/lib/database-errors": compile("../src/lib/database-errors.ts") });
   return { ...actions, calls };
 }
 
@@ -105,6 +105,16 @@ test("special requests are saved with their requested model and no invented pric
   assert.equal(calls.writes[0].payload.listed_price, null);
 });
 
+test("removed phones cannot be ordered and edited prices are taken from inventory", async () => {
+  const removed = setup({ removed: true });
+  assert.ok((await removed.placeOrder(form(), productsModule.products[0].id, requestId)).error);
+  assert.equal(removed.calls.writes.length, 0);
+  const edited = setup({ overrides: { name: "Edited phone", price: 350000 } });
+  assert.equal((await edited.placeOrder(form(), productsModule.products[0].id, requestId)).orderId, orderId);
+  assert.equal(edited.calls.writes[0].payload.listed_price, 350000);
+  assert.equal(edited.calls.writes[0].payload.phone_name, "Edited phone");
+});
+
 test("failed saves do not return an order reference", async () => {
   const { placeOrder } = setup({ writeError: true });
   const result = await placeOrder(form(), null, requestId);
@@ -139,7 +149,7 @@ test("database failures expose setup instructions only in the authorized admin v
   assert.equal(publicResult.error, undefined);
   assert.equal(publicResult.orders, undefined);
   const admin = setup({ admin: true, readError: true });
-  assert.match((await admin.getOrders(true)).error, /database setup/);
+  assert.match((await admin.getOrders(true)).error, /customer_orders.*missing/);
   const failedSubmission = await customer.placeOrder(form(), null, requestId);
   assert.ok(failedSubmission.error);
   assert.doesNotMatch(failedSubmission.error, /database|setup|table/i);

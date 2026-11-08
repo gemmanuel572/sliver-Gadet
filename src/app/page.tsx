@@ -270,7 +270,7 @@ export default function Home() {
                   </p>
                   <details className="mt-3 rounded-lg border border-white/10 bg-[#080b12] p-3">
                     <summary className="cursor-pointer text-sm font-semibold text-blue-400">View Phone Conditions</summary>
-                    <div className="mt-4"><PhoneConditionReport conditions={product.conditions} compact /></div>
+                    <div className="mt-4"><PhoneConditionReport conditions={product.conditions} labels={product.conditionLabels} compact /></div>
                     <Link href={`/products/${product.id}#condition-report`} className="mt-3 inline-block text-xs text-blue-400 underline">Open full condition report →</Link>
                   </details>
 

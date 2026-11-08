@@ -11,7 +11,7 @@ function load(file, mocks) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(source, { exports, require: name => name in mocks ? mocks[name] : name === "@/lib/phone-conditions" ? load("../src/lib/phone-conditions.ts", {}) : require(name), File, crypto, console });
+  vm.runInNewContext(source, { exports, require: name => name in mocks ? mocks[name] : name === "@/lib/phone-conditions" ? load("../src/lib/phone-conditions.ts", {}) : name === "@/lib/inventory" ? load("../src/lib/inventory.ts", {}) : name === "@/lib/database-errors" ? load("../src/lib/database-errors.ts", {}) : require(name), File, crypto, console });
   return exports;
 }
 
@@ -88,7 +88,7 @@ test("public catalogue filters published phones, signs photos and retains existi
     "next/server": { NextResponse: { json: (body, options) => ({ body, options }) } },
     "@/data/products": { products },
     "@/lib/supabase/server": { createClient: async () => ({
-      from: table => table === "phone_condition_reports" ? { select: async () => ({ data: [
+      from: table => table === "phone_availability" ? { select: async () => ({ data: [] }) } : table === "phone_condition_reports" ? { select: async () => ({ data: [
         { product_id: "new-phone", conditions: { batteryHealth: "94%", screen: "Cracked — disclosed" } },
         { product_id: products[0].id, conditions: { batteryHealth: "90%" } },
       ] }) } : ({ select: () => ({ eq: (key, value) => {
@@ -118,9 +118,7 @@ test("booked original and uploaded phones are excluded even for an admin viewer"
     "next/server": { NextResponse: { json: (body, options) => ({ body, options }) } },
     "@/data/products": { products },
     "@/lib/supabase/server": { createClient: async () => ({
-      from: table => table === "phone_condition_reports" ? { select: async () => ({ data: [] }) } : ({ select: () => ({ eq: () => table === "phone_availability"
-        ? Promise.resolve({ data: [{ product_id: products[0].id }, { product_id: "booked-upload" }] })
-        : { order: async () => ({ data: [{ id: "booked-upload" }] }) } }) }),
+      from: table => table === "phone_availability" ? { select: async () => ({ data: [{ product_id: products[0].id, booked: true }, { product_id: "booked-upload", booked: true }] }) } : table === "phone_condition_reports" ? { select: async () => ({ data: [] }) } : ({ select: () => ({ eq: () => ({ order: async () => ({ data: [{ id: "booked-upload" }] }) }) }) }),
       storage: { from: () => ({ createSignedUrls: async () => { signingCalls++; throw new Error("Should not sign booked photos"); } }) },
     }) },
   });
@@ -142,7 +140,9 @@ test("condition verification requires admin access, all results and a successful
       auth: { getUser: async () => ({ data: { user: { id: "admin-id" } } }) },
       from: table => table === "admin_users" ? {
         select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: isAdmin ? { user_id: "admin-id" } : null }) }) }),
-      } : { upsert: async value => { if (!saveError) reports.push(value); return { error: saveError }; } },
+      } : table === "phone_uploads" ? { select: () => ({ order: async () => ({ data: [] }), eq: () => ({ order: async () => ({ data: [] }) }) }) }
+        : table === "phone_availability" ? { select: async () => ({ data: [] }) }
+        : { select: async () => ({ data: [] }), upsert: async value => { if (!saveError) reports.push(value); return { error: saveError }; } },
     }) },
   });
   const id = productsModule.products[0].id;
@@ -164,7 +164,7 @@ test("condition verification requires admin access, all results and a successful
   assert.equal(reports.length, 2);
 });
 
-test("missing database setup lists the homepage phones but clearly blocks verification", async () => {
+test("missing database setup blocks editing instead of pretending unpublished products are active", async () => {
   const productsModule = load("../src/data/products.ts", {});
   const missing = { code: "PGRST205", message: "Table not found" };
   const { getAdminConditionPhones } = load("../src/app/admin/actions.ts", {
@@ -173,16 +173,14 @@ test("missing database setup lists the homepage phones but clearly blocks verifi
       auth: { getUser: async () => ({ data: { user: { id: "admin-id" } } }) },
       from: table => {
         if (table === "admin_users") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { user_id: "admin-id" } }) }) }) };
-        if (table === "phone_uploads") return { select: () => ({ order: async () => ({ error: missing }) }) };
+        if (table === "phone_uploads") return { select: () => ({ order: async () => ({ error: missing }), eq: () => ({ order: async () => ({ error: missing }) }) }) };
         return { select: async () => ({ error: missing }) };
       },
     }) },
   });
   const result = await getAdminConditionPhones();
-  assert.equal(result.setupRequired, true);
-  assert.match(result.error, /supabase\/setup.sql/);
-  assert.equal(result.phones.length, productsModule.products.length);
-  assert.equal(result.phones[0].conditions.batteryHealth, "Not yet verified");
+  assert.match(result.error, /supabase\/repair.sql/);
+  assert.equal(result.phones, undefined);
 });
 
 test("an admin condition edit replaces unverified values in the public homepage catalogue", async () => {
@@ -197,8 +195,8 @@ test("an admin condition edit replaces unverified values in the public homepage 
         upsert: async row => { saved.set(row.product_id, row.conditions); return {}; },
         select: async () => ({ data: [...saved].map(([product_id, conditions]) => ({ product_id, conditions })) }),
       };
-      if (table === "phone_availability") return { select: () => ({ eq: async () => ({ data: [] }) }) };
-      return { select: () => ({ eq: () => ({ order: async () => ({ data: [] }) }) }) };
+      if (table === "phone_availability") return { select: async () => ({ data: [] }) };
+      return { select: () => ({ order: async () => ({ data: [] }), eq: () => ({ order: async () => ({ data: [] }) }) }) };
     },
   };
   const mocks = { "@/data/products": productsModule, "@/lib/supabase/server": { createClient: async () => client } };
@@ -227,7 +225,7 @@ test("availability failure does not return a catalogue containing possibly booke
     "next/server": { NextResponse: { json: (body, options) => ({ body, options }) } },
     "@/data/products": load("../src/data/products.ts", {}),
     "@/lib/supabase/server": { createClient: async () => ({
-      from: () => ({ select: () => ({ eq: async () => ({ error: new Error("Unavailable") }) }) }),
+      from: () => ({ select: async () => ({ error: new Error("Unavailable") }) }),
     }) },
   });
   const response = await GET();
@@ -244,7 +242,7 @@ test("original featured phones stay visible before the new database tables are c
     "@/lib/supabase/server": { createClient: async () => ({
       from: table => {
         if (table === "phone_condition_reports") return { select: async () => ({ error: missing }) };
-        if (table === "phone_availability") return { select: () => ({ eq: async () => ({ error: missing }) }) };
+        if (table === "phone_availability") return { select: async () => ({ error: missing }) };
         return { select: () => ({ eq: () => ({ order: async () => ({ error: missing }) }) }) };
       },
     }) },
@@ -263,15 +261,22 @@ test("missing upload and inspection tables do not restore phones already marked 
     "@/data/products": { products },
     "@/lib/supabase/server": { createClient: async () => ({
       from: table => {
-        if (table === "phone_availability") return { select: () => ({ eq: async () => ({ data: [{ product_id: products[0].id }] }) }) };
+        if (table === "phone_availability") return { select: async () => ({ data: [
+          { product_id: products[0].id, booked: true },
+          { product_id: products[1].id, is_removed: true },
+          { product_id: products[2].id, overrides: { name: "Updated Samsung", price: 950000 } },
+        ] }) };
         if (table === "phone_condition_reports") return { select: async () => ({ error: missing }) };
         return { select: () => ({ eq: () => ({ order: async () => ({ error: missing }) }) }) };
       },
     }) },
   });
   const response = await GET();
-  assert.equal(response.body.products.length, products.length - 1);
+  assert.equal(response.body.products.length, products.length - 2);
   assert.equal(response.body.products.some(phone => phone.id === products[0].id), false);
+  assert.equal(response.body.products.some(phone => phone.id === products[1].id), false);
+  assert.equal(response.body.products.find(phone => phone.id === products[2].id).price, 950000);
+  assert.equal(response.body.products.find(phone => phone.id === products[2].id).name, "Updated Samsung");
 });
 
 test("only admins can change booking status, and cancelled bookings can be restored", async () => {

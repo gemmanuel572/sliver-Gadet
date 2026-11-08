@@ -2,7 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { products } from "@/data/products";
-import { conditionKeys, defaultConditions, isReportVerified, mergeConditions, type PhoneConditions } from "@/lib/phone-conditions";
+import { isReportVerified, reportForPhone, validConditionKey, UNVERIFIED, type PhoneConditions } from "@/lib/phone-conditions";
+import { applyInventoryOverrides, parsePhoneDetails } from "@/lib/inventory";
+import { databaseSetupError } from "@/lib/database-errors";
 
 async function adminClient() {
   const supabase = await createClient();
@@ -14,62 +16,103 @@ async function adminClient() {
 }
 
 export async function getAdminConditionPhones() {
+  const inventory = await getAdminPhones(true);
+  if (inventory.error) return { error: inventory.error };
   const supabase = await adminClient();
   if (!supabase) return { error: "Administrator access is required." };
-  const [uploads, reports] = await Promise.all([
-    supabase.from("phone_uploads").select("id,name,brand").order("created_at", { ascending: false }),
-    supabase.from("phone_condition_reports").select("product_id,conditions"),
-  ]);
-  if (uploads.error || reports.error) {
-    const missingTable = [uploads.error, reports.error].some(error => error && ["PGRST205", "42P01"].includes(error.code));
-    if (missingTable) return {
-      error: "The phone database has not been set up. Run supabase/setup.sql once in your Supabase SQL editor, then reload this list. Conditions cannot be saved until setup is complete.",
-      setupRequired: true,
-      phones: products.map(phone => ({ id: phone.id, name: phone.name, conditions: phone.conditions })),
-    };
-    return { error: "Could not load phone conditions. Please retry; saved reports could not be checked." };
-  }
-  const saved = new Map((reports.data || []).map(row => [row.product_id, row.conditions]));
-  return { phones: [
-    ...(uploads.data || []).map(phone => ({ id: phone.id as string, name: phone.name as string, conditions: mergeConditions(defaultConditions(phone.brand), saved.get(phone.id)) })),
-    ...products.map(phone => ({ id: phone.id, name: phone.name, conditions: mergeConditions(phone.conditions, saved.get(phone.id)) })),
-  ] };
+  const { data, error } = await supabase.from("phone_condition_reports").select("product_id,conditions,field_labels,removed_fields");
+  if (error) return { error: databaseSetupError("Phone Conditions", "phone_condition_reports", error) };
+  const saved = new Map((data || []).map(report => [report.product_id, report]));
+  return { phones: (inventory.phones || []).filter(phone => phone.published && !phone.booked && !phone.removed).map(phone => ({
+    id: phone.id, name: phone.name, brand: phone.brand,
+    ...reportForPhone(phone.brand, products.find(item => item.id === phone.id)?.conditions, saved.get(phone.id)),
+  })) };
 }
 
 export async function savePhoneConditions(id: string, values: PhoneConditions, requireComplete: boolean) {
   const supabase = await adminClient();
   if (!supabase) return { error: "Administrator access is required." };
-  if (typeof id !== "string" || typeof requireComplete !== "boolean" || !values || typeof values !== "object" ||
-      Object.keys(values).length !== conditionKeys.length || conditionKeys.some(key => typeof values[key] !== "string" || !values[key].trim() || values[key].trim().length > 160)) {
-    return { error: "Enter a result for every inspection field, using up to 160 characters each. Leave untested fields as Not yet verified." };
+  if (!values || typeof values !== "object" || Array.isArray(values) || Object.keys(values).length > 40 ||
+      Object.entries(values).some(([key, value]) => !validConditionKey(key) || typeof value !== "string" || value.length > 160)) {
+    return { error: "Use valid inspection fields and results up to 160 characters each." };
   }
-  if (!products.some(phone => phone.id === id)) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return { error: "Phone not found." };
-    const { data, error } = await supabase.from("phone_uploads").select("id").eq("id", id).maybeSingle();
-    if (error || !data) return { error: "Phone not found." };
-  }
-  const conditions = Object.fromEntries(conditionKeys.map(key => [key, values[key].trim()])) as PhoneConditions;
+  const available = await getAdminConditionPhones();
+  if (available.error) return { error: available.error };
+  const phone = available.phones?.find(phone => phone.id === id);
+  if (!phone) return { error: "This phone is no longer published in the store." };
+  const conditions = { ...phone.conditions, ...Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim() || UNVERIFIED])) };
   if (requireComplete && !isReportVerified(conditions)) return { error: "Check every item before verifying this phone, or save your progress." };
   const { error } = await supabase.from("phone_condition_reports").upsert({ product_id: id, conditions }, { onConflict: "product_id" });
-  if (error) return { error: ["PGRST205", "42P01"].includes(error.code)
-    ? "The condition report table is missing. Run supabase/setup.sql in Supabase before saving inspections."
-    : "Could not save this condition report. Your changes have not been published. Please try again." };
+  if (error) return { error: databaseSetupError("Phone Conditions", "phone_condition_reports", error) };
   return { success: true };
 }
 
-export async function getAdminPhones() {
+export async function saveInspectionField(id: string, key: string, label: string, value: string, operation: "save" | "clear" | "remove") {
   const supabase = await adminClient();
   if (!supabase) return { error: "Administrator access is required." };
+  if (typeof id !== "string" || typeof key !== "string" || !validConditionKey(key) || typeof label !== "string" || !label.trim() || label.trim().length > 80 ||
+      typeof value !== "string" || value.length > 160 || !["save", "clear", "remove"].includes(operation)) return { error: "Use a field label of up to 80 characters and a result of up to 160 characters." };
+  const available = await getAdminConditionPhones();
+  if (available.error) return { error: available.error };
+  const phone = available.phones?.find(phone => phone.id === id);
+  if (!phone) return { error: "This phone is no longer published in the store. Reload the phone list." };
+  if (key === "trueTone" && phone.brand.toLowerCase() !== "apple" && operation !== "remove") return { error: "True Tone is only applicable to Apple phones." };
+  if (operation === "save" && !(key in phone.conditions) && Object.keys(phone.conditions).length >= 40) return { error: "A phone can have up to 40 active inspection fields." };
+  const { error } = await supabase.rpc("manage_phone_inspection_field", {
+    phone_id: id, field_key: key, field_label: label.trim(), field_value: value.trim() || UNVERIFIED, field_operation: operation,
+  });
+  if (error) return { error: "Could not save this inspection field. Run supabase/migrations/202611060007_dynamic_inspection_fields.sql after supabase/repair.sql, then reload. If the phone was booked or removed, it is no longer in this list." };
+  return { success: true };
+}
+
+export async function getAdminPhones(publishedOnly = false) {
+  const supabase = await adminClient();
+  if (!supabase) return { error: "Administrator access is required." };
+  if (typeof publishedOnly !== "boolean") return { error: "Invalid inventory filter." };
+  const source = supabase.from("phone_uploads").select("id,name,brand,price,description,colors,storage,is_published");
   const [uploads, availability] = await Promise.all([
-    supabase.from("phone_uploads").select("id,name,brand,price,is_published").order("created_at", { ascending: false }),
-    supabase.from("phone_availability").select("product_id,booked"),
+    (publishedOnly ? source.eq("is_published", true) : source).order("created_at", { ascending: false }),
+    supabase.from("phone_availability").select("product_id,booked,is_removed,overrides"),
   ]);
-  if (uploads.error || availability.error) return { error: "Could not load inventory. Check the database setup and try again." };
-  const booked = new Set((availability.data || []).filter(row => row.booked).map(row => row.product_id));
+  if (uploads.error) return { error: databaseSetupError("Inventory", "phone_uploads", uploads.error) };
+  if (availability.error) return { error: databaseSetupError("Inventory", "phone_availability", availability.error) };
+  const states = new Map((availability.data || []).map(row => [row.product_id, row]));
+  const withState = <T extends { id: string; name: string; brand: string; price: number; description: string; colors: string[]; storage: string[]; published: boolean }>(phone: T) => {
+    const state = states.get(phone.id);
+    return { ...applyInventoryOverrides(phone, state?.overrides), booked: Boolean(state?.booked), removed: Boolean(state?.is_removed) };
+  };
   return { phones: [
-    ...(uploads.data || []).map(phone => ({ id: phone.id as string, name: phone.name as string, price: Number(phone.price), published: Boolean(phone.is_published), booked: booked.has(phone.id) })),
-    ...products.map(phone => ({ id: phone.id, name: phone.name, price: phone.price, published: true, booked: booked.has(phone.id) })),
+    ...(uploads.data || []).map(phone => withState({ id: phone.id as string, name: phone.name as string, brand: phone.brand as string, price: Number(phone.price), description: phone.description as string, colors: phone.colors as string[], storage: phone.storage as string[], published: Boolean(phone.is_published) })),
+    ...products.map(phone => withState({ ...phone, published: true })),
   ] };
+}
+
+async function inventoryPhoneExists(supabase: NonNullable<Awaited<ReturnType<typeof adminClient>>>, id: string) {
+  if (typeof id !== "string") return false;
+  if (products.some(phone => phone.id === id)) return true;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return false;
+  const { data, error } = await supabase.from("phone_uploads").select("id").eq("id", id).maybeSingle();
+  return Boolean(data && !error);
+}
+
+export async function editInventoryPhone(id: string, form: FormData) {
+  const supabase = await adminClient();
+  if (!supabase) return { error: "Administrator access is required." };
+  const details = parsePhoneDetails(form);
+  if (!details) return { error: "Enter a phone name, brand, positive price, colours and storage options. Check field lengths." };
+  if (!await inventoryPhoneExists(supabase, id)) return { error: "Phone not found." };
+  const { error } = await supabase.from("phone_availability").upsert({ product_id: id, overrides: details }, { onConflict: "product_id" });
+  if (error) return { error: databaseSetupError("Edit phone", "phone_availability", error) };
+  return { success: true };
+}
+
+export async function removeInventoryPhone(id: string, removed: boolean) {
+  const supabase = await adminClient();
+  if (!supabase) return { error: "Administrator access is required." };
+  if (typeof removed !== "boolean" || !await inventoryPhoneExists(supabase, id)) return { error: "Phone not found." };
+  const { error } = await supabase.from("phone_availability").upsert({ product_id: id, is_removed: removed }, { onConflict: "product_id" });
+  if (error) return { error: databaseSetupError("Remove/restore phone", "phone_availability", error) };
+  return { success: true };
 }
 
 export async function setPhoneBooked(id: string, booked: boolean) {

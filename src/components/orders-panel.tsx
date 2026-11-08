@@ -87,7 +87,11 @@ export default function OrdersPanel({ admin = false, requestsOnly = false }: { a
     {admin && requestsOnly && <p className="mt-3 text-sm text-gray-400">Requests stay active until delivery is verified. When you source a phone, choose Already Available and upload it to the website.</p>}
     {loading && <p role="status" className="mt-4 text-gray-400">Loading orders…</p>}
     {!admin && unavailable && <div role="status" className="mt-4 rounded-xl border border-white/10 bg-[#111827] p-5"><p className="text-gray-300">Order tracking is temporarily unavailable.</p><p className="mt-2 text-sm text-gray-400">You can contact SILVA for an update on your order.</p><a href="https://wa.me/2348137596850" target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-blue-400 underline">Chat with SILVA on WhatsApp</a><button type="button" onClick={() => void refresh()} className="ml-5 text-sm text-blue-400 underline">Try Again</button></div>}
-    {error && <div className="mt-4"><p role="alert" className="text-red-400">{error}</p><button type="button" onClick={() => void refresh()} className="mt-2 text-blue-400 underline">Refresh Orders</button></div>}
+    {error && <div className="mt-4 rounded-xl border border-white/10 bg-[#111827] p-5">
+      <p role="alert" className="text-gray-300">{admin ? `${requestsOnly ? "Special requests" : "Customer orders"} could not be loaded. Try refreshing.` : error}</p>
+      {admin && <details className="mt-3 text-sm text-gray-400"><summary className="cursor-pointer">View details</summary><p className="mt-2 break-words">{error}</p></details>}
+      <button type="button" onClick={() => void refresh()} className="mt-3 text-blue-400 underline">{requestsOnly ? "Refresh Requests" : "Refresh Orders"}</button>
+    </div>}
     {!loading && !signedIn && !error && !unavailable && <p className="mt-4 text-gray-400"><Link href="/login?next=%2F%23my-orders" className="text-blue-400 underline">Sign in</Link> to view orders and verify your deliveries.</p>}
     {message && <p role="status" className="mt-4 text-green-400">{message}</p>}
     {signedIn && !unavailable && <>

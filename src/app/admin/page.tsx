@@ -190,12 +190,17 @@ async function AdminDashboardContent() {
           </h2>
 
           <p className="mt-3 text-gray-400">
-            Upload phone photos and details below.
-            More management features are coming soon.
+            Upload phones, remove phones from the customer homepage, and manage your store below.
           </p>
 
           <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <PhoneUpload />
+            <div className="rounded-2xl border border-white/10 bg-[#111827] p-7">
+              <div className="mb-5 text-3xl">📦</div>
+              <h3 className="text-xl font-bold">Manage Homepage Phones</h3>
+              <p className="mt-3 text-sm leading-7 text-gray-400">Manage phones already displayed on the customer homepage, including original phones and uploaded phones. Choose Remove Phone to hide a listing, or restore it later.</p>
+              <Link href="#phone-inventory" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-700">Remove or Restore Phones</Link>
+            </div>
             <PhoneConditionManager />
             <div className="rounded-2xl border border-white/10 bg-[#111827] p-7">
               <div className="mb-5 text-3xl">🛒</div><h3 className="text-xl font-bold">Customer Orders</h3>
@@ -206,12 +211,6 @@ async function AdminDashboardContent() {
               <div className="mb-5 text-3xl">📋</div><h3 className="text-xl font-bold">Special Requests</h3>
               <p className="mt-3 text-sm leading-7 text-gray-400">Keep requested phones here until you source and deliver them. Upload a phone when it becomes available.</p>
               <Link href="#special-requests" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold">Manage Special Requests</Link>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-[#111827] p-7">
-              <div className="mb-5 text-3xl">📦</div>
-              <h3 className="text-xl font-bold">Inventory</h3>
-              <p className="mt-3 text-sm leading-7 text-gray-400">Remove booked phones from the customer store or make them available again.</p>
-              <Link href="#phone-inventory" className="mt-6 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-700">Manage Booked Phones</Link>
             </div>
             {[
               {

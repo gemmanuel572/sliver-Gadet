@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { products } from "@/data/products";
 import type { CustomerOrder, OrderDetails } from "@/lib/orders";
+import { applyInventoryOverrides } from "@/lib/inventory";
+import { databaseSetupError } from "@/lib/database-errors";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const orderColumns = "id,customer_id,customer_email,product_id,kind,phone_name,listed_price,details,status,created_at";
@@ -40,17 +42,18 @@ export async function placeOrder(form: FormData, productId: string | null, reque
   let phoneName = value("phoneModel");
   let price: number | null = null;
   if (productId !== null) {
-    const { data: availability, error: stockError } = await supabase.from("phone_availability").select("booked").eq("product_id", productId).maybeSingle();
+    const { data: availability, error: stockError } = await supabase.from("phone_availability").select("booked,is_removed,overrides").eq("product_id", productId).maybeSingle();
     if (stockError) return { error: "We could not verify availability. Please try again." };
-    if (availability?.booked) return { error: "This phone has already been booked. Please choose another phone." };
-    let phone: { name: string; price: number; colors: string[]; storage: string[] } | undefined = products.find(item => item.id === productId);
+    if (availability?.booked || availability?.is_removed) return { error: "This phone is no longer available. Please choose another phone." };
+    let phone: { name: string; brand: string; price: number; description: string; colors: string[]; storage: string[] } | undefined = products.find(item => item.id === productId);
     if (!phone) {
       if (!uuidPattern.test(productId)) return { error: "Phone not found." };
-      const { data, error } = await supabase.from("phone_uploads").select("name,price,colors,storage")
+      const { data, error } = await supabase.from("phone_uploads").select("name,brand,price,description,colors,storage")
         .eq("id", productId).eq("is_published", true).maybeSingle();
       if (error || !data) return { error: "This phone is no longer available." };
-      phone = { name: data.name, price: Number(data.price), colors: data.colors, storage: data.storage };
+      phone = { name: data.name, brand: data.brand, price: Number(data.price), description: data.description, colors: data.colors, storage: data.storage };
     }
+    phone = applyInventoryOverrides(phone, availability?.overrides);
     if (!phone.colors.includes(details.color) || !phone.storage.includes(details.storage)) return { error: "Choose one of this phone’s available colours and storage options." };
     phoneName = phone.name; price = phone.price;
   }
@@ -80,12 +83,12 @@ export async function getOrders(admin = false) {
   if (!admin) query = query.eq("customer_id", user.id);
   const { data, error } = await query;
   if (error) return admin
-    ? { error: "Could not load orders. Check the order database setup and try again." }
+    ? { error: databaseSetupError("Customer Orders / Special Requests", "customer_orders", error) }
     : { signedIn: true, unavailable: true };
   if (!data?.length) return { signedIn: true, orders: [] as CustomerOrder[] };
   const { data: publications, error: publicationError } = await supabase.from("request_publications").select("order_id,product_id");
   if (publicationError) return admin
-    ? { error: "Could not load special request availability. Check the request_publications table and try again." }
+    ? { error: databaseSetupError("Special Requests", "request_publications", publicationError) }
     : { signedIn: true, unavailable: true };
   const available = new Map((publications || []).map(row => [row.order_id, row.product_id]));
   return { signedIn: true, orders: (data || []).map(order => ({ ...order, request_available: available.has(order.id), published_product_id: available.get(order.id) || null })) as CustomerOrder[] };
